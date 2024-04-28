@@ -1,0 +1,150 @@
+; Assemble with  Macro Assembler AS
+;	asw.exe countertest.a48 -L
+;	p2bin.exe countertest.p countertest.bin -r 1024-3071
+;
+; This program tests the synchronization between the line counter and the 
+; Y Position register. Timer start values will product the following ypos values
+; and screen color:
+; 88 = 79 (Blue to bottom of 4th row), 0e = F3 (All Blue), 0FF = 02 (All Black)
+; 29 = d1 (Blue to bottom of last row), 20 = E1(All Blue), 10 = f1 (All Blue)
+; Comment out callreadbeampos in timer and uncomment in mainloop, Ypos = F6
+;
+; PositionRegister_88.jpg shows what the screen looks like with a TIMER_START value of 88
+	
+	cpu	8048
+	org	400h
+	include	"g7000.h"    
+ 
+TIMER_START 	equ	0ffH
+ 
+	jmp		myinit
+	jmp		irq				; interrupt
+	jmp		timer			; timer interrupt
+	jmp		vsyncirq    	; vsync-interrupt
+	jmp 	start
+    jmp 	nullirq    		; sound-interrupt
+
+nullirq
+	retr
+
+myinit
+    call 	init			; to skip select game message
+	
+start
+	sel 	rb1
+	dis 	i
+	call	gfxoff
+	
+	mov		r0,#vdc_color	;background color blue, grid white
+	mov		a,#0fh			;
+	movx	@r0,a			;turn on grid
+	mov		r7,#29h	
+	mov 	r0,#vdc_gridh0
+	mov 	a,#0ffh
+fillloop:
+	movx	@r0,a
+	inc		r0
+	djnz	r7,fillloop
+	
+	mov 	r0, #vdc_control	;Setup VDC
+	mov 	a,#28h
+	movx	@r0,a
+	call	gfxon
+	mov		r2,#0
+	en 		i
+
+mainloop
+	call  	gfxon
+	call  	waitvsync	; wait for begin of frame
+
+	;call 	readbeampos
+	call  	gfxoff
+	
+	mov		r0,#vdc_color	;background color blue, grid white
+	mov		a,#0fh			;
+	movx	@r0,a			;
+		
+	mov		a,#TIMER_START	;reset counter
+	mov		t,a				;
+	strt	cnt				;
+	en 		tcnti			;
+
+;Display hex number in R2
+	mov 	r1,#hexchar & 0ffh		;hex character lookup table
+	mov		a,r2			;get byte to display
+	swap	a				;upper digit
+	anl 	a,#0fh			;
+	add		a,r1			;index into lookup table		
+	movp	a,@a
+	mov		r5,a			;character code
+	mov 	r4,#020h		;y postion
+	mov		r6,#2			;color
+	call	014bh			;convert character code		
+	mov		a,#vdc_char0
+	mov		r0,a
+	mov		a,r4			;y position
+	movx	@r0,a			
+	inc		r0
+	mov 	a,#1ah			;x position
+	movx	@r0,a
+	inc		r0
+	mov		a,r5			;character code
+	movx	@r0,a
+	inc		r0
+	mov		a,r6			;color
+	movx	@r0,a
+	inc		r0
+	
+	mov		a,r2			;get byte to display
+	anl 	a,#0fh			;lower digit
+	mov 	r1,#hexchar & 0ffh	;get pointer to character table
+	add		a,r1			;add pointer to digit value
+	movp	a,@a			;get character code
+	mov		r5,a			;character code
+	mov 	r4,#020h		;y postion
+	mov		r6,#2			;color
+	call	014bh			;convert character code		
+	mov		a,r4			;y position
+	movx	@r0,a			;
+	inc		r0				;
+	mov 	a,#22h			;x position
+	movx	@r0,a			;
+	inc		r0				;
+	mov		a,r5			;character code
+	movx	@r0,a			;
+	inc		r0				;
+	mov		a,r6			;color
+	movx	@r0,a
+	
+	jmp mainloop
+	
+
+
+readbeampos
+	mov 	r0, #vdc_control	
+	mov 	r1, #0a5h		;beam x-position register
+	movx	a,@r0
+	orl 	a,#02h			;latch beam position
+	movx 	@r0,a			;
+	movx 	a,@r1			;get beam position x
+	dec 	r1				;r1= a4
+	movx 	a,@r1			;get beam position y
+	mov 	r2,a			;Save for display
+	retr 
+	
+hexchar db	0,1,2,3,4,5,6,7,8,9
+		db	020h,025h,023h,01ah,012h,01bh			
+	
+timer	
+	nop		;Delay to be sure we are in hblank before changing the color
+	nop
+	nop
+	nop
+	nop
+	mov		r0,#vdc_color	;background black, grid white
+	mov		a,#07h			;
+	movx	@r0,a			;
+		
+	call	readbeampos
+	
+	retr		
