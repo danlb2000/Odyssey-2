@@ -1,1 +1,1 @@
-
+This program is used to test the relationship between the scanline counter and vertical position register on the Odyssey 2. It also demonstrates how to use the scan line counter to do mid-screen color changes. PositionRegisterTest_88.jpg shows what the screen looks like on actual hardware with a TIMER_START value of 88.
